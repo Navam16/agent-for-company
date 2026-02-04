@@ -29,11 +29,11 @@ client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 # --------------------------------------
 @st.cache_data
 def load_data():
-    online_sales = pd.read_csv("data/Online_Sales.csv")
-    discount_coupon = pd.read_csv("data/Discount_Coupon.csv")
-    marketing_spend = pd.read_csv("data/Marketing_Spend.csv")
-    customer_data = pd.read_excel("data/CustomersData.xlsx")
-    tax_amount = pd.read_excel("data/Tax_amount.xlsx")
+    online_sales = pd.read_csv("Online_Sales.csv")
+    discount_coupon = pd.read_csv("Discount_Coupon.csv")
+    marketing_spend = pd.read_csv("Marketing_Spend.csv")
+    customer_data = pd.read_excel("CustomersData.xlsx")
+    tax_amount = pd.read_excel("Tax_amount.xlsx")
 
     return online_sales, discount_coupon, marketing_spend, customer_data, tax_amount
 
