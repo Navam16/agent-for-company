@@ -25,7 +25,7 @@ st.caption("Ask business questions in natural language")
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
 # --------------------------------------
-# LOAD DATA (LOCAL REPO FILES)
+# LOAD DATA (FILES IN REPO ROOT)
 # --------------------------------------
 @st.cache_data
 def load_data():
@@ -35,9 +35,45 @@ def load_data():
     customer_data = pd.read_excel("CustomersData.xlsx")
     tax_amount = pd.read_excel("Tax_amount.xlsx")
 
-    return online_sales, discount_coupon, marketing_spend, customer_data, tax_amount
+    return {
+        "Online Sales": online_sales,
+        "Discount Coupon": discount_coupon,
+        "Marketing Spend": marketing_spend,
+        "Customer Data": customer_data,
+        "Tax Amount": tax_amount
+    }
 
-online_sales, discount_coupon, marketing_spend, customer_data, tax_amount = load_data()
+datasets = load_data()
+
+online_sales = datasets["Online Sales"]
+discount_coupon = datasets["Discount Coupon"]
+marketing_spend = datasets["Marketing Spend"]
+customer_data = datasets["Customer Data"]
+tax_amount = datasets["Tax Amount"]
+
+# --------------------------------------
+# SIDEBAR — DATASET EXPLORER (NEW)
+# --------------------------------------
+st.sidebar.title("📁 Data Explorer")
+
+selected_dataset_name = st.sidebar.selectbox(
+    "Select a dataset to preview",
+    list(datasets.keys())
+)
+
+show_preview = st.sidebar.checkbox("Preview dataset", value=True)
+
+if show_preview:
+    st.sidebar.markdown("### 🔍 Dataset Preview")
+    st.sidebar.dataframe(
+        datasets[selected_dataset_name].head(20),
+        use_container_width=True
+    )
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("📊 **Available Datasets**")
+for name, df in datasets.items():
+    st.sidebar.write(f"- **{name}** ({df.shape[0]} rows, {df.shape[1]} columns)")
 
 # --------------------------------------
 # DATA PREPROCESSING
@@ -66,20 +102,24 @@ tax_amount["GST"] = tax_amount["GST"].fillna(0)
 # LOOKUPS
 # --------------------------------------
 tax_lookup = tax_amount.set_index("Product_Category")["GST"]
+
 discount_lookup = discount_coupon.set_index(
     ["Month", "Product_Category"]
 )["Discount_pct"]
+
 marketing_lookup = marketing_spend.groupby(
     ["Year", "Month"]
 )["Total_Marketing_Spend"].sum()
 
 online_sales["GST_pct"] = online_sales["Product_Category"].map(tax_lookup)
+
 online_sales["Discount_pct"] = (
     online_sales
     .set_index(["Month", "Product_Category"])
     .index.map(discount_lookup)
     .fillna(0)
 )
+
 online_sales["Marketing_Spend"] = (
     online_sales
     .set_index(["Year", "Month"])
@@ -177,16 +217,16 @@ Explain:
 st.markdown("## 💡 Example Questions You Can Ask")
 
 example_queries = [
-    "How did Android and Nest products perform over time in California compared to New York?",
-    "Which product categories show consistent growth across multiple regions?",
-    "When marketing spend increased, which product categories translated that into higher revenue?",
-    "Are there regions where offline marketing performs better than online marketing?",
-    "Which products rely heavily on discounts to generate sales?",
-    "Did discount-heavy months help or hurt revenue for Apparel and Bags?",
-    "Which product categories perform well in California but struggle in Chicago?",
-    "Are there products that sell in high volume but contribute very little revenue?",
-    "If marketing budgets were reduced, which products would be least impacted?",
-    "Based on sales, discounts, and marketing together, where should the company focus next?"
+    "Which product categories generate high revenue with relatively low marketing spend?",
+    "How do discounts impact revenue differently across product categories?",
+    "Which products perform well in California but underperform in New York?",
+    "Are there categories where offline marketing is more effective than online?",
+    "Which products depend heavily on discounts to drive volume?",
+    "How does marketing spend correlate with sales for Nest and Google products?",
+    "Which categories have high sales volume but low overall revenue?",
+    "Where should marketing budgets be reallocated for better ROI?",
+    "Which products are consistently underperforming despite promotions?",
+    "Based on all data, what should be the top business focus areas?"
 ]
 
 selected_query = st.radio(
