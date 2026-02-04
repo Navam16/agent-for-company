@@ -7,6 +7,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from groq import Groq
 import json
+import os
 
 # --------------------------------------
 # PAGE CONFIG
@@ -26,19 +27,31 @@ st.caption("Ask business questions in natural language")
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
 # --------------------------------------
-# LOAD DATA (GitHub-hosted)
+# LOAD DATA (LOCAL FILES — Streamlit Cloud)
 # --------------------------------------
 @st.cache_data
 def load_data():
-    BASE_URL = "https://raw.githubusercontent.com/<YOUR_USERNAME>/<YOUR_REPO>/main/data"
+    required_files = [
+        "Online_Sales.csv",
+        "Discount_Coupon.csv",
+        "Marketing_Spend.csv",
+        "CustomersData.xlsx",
+        "Tax_amount.xlsx"
+    ]
 
-    online_sales = pd.read_csv(f"{BASE_URL}/Online_Sales.csv")
-    discount_coupon = pd.read_csv(f"{BASE_URL}/Discount_Coupon.csv")
-    marketing_spend = pd.read_csv(f"{BASE_URL}/Marketing_Spend.csv")
-    customer_data = pd.read_excel(f"{BASE_URL}/CustomersData.xlsx")
-    tax_amount = pd.read_excel(f"{BASE_URL}/Tax_amount.xlsx")
+    for file in required_files:
+        if not os.path.exists(file):
+            st.error(f"❌ Missing file: {file}")
+            st.stop()
+
+    online_sales = pd.read_csv("Online_Sales.csv")
+    discount_coupon = pd.read_csv("Discount_Coupon.csv")
+    marketing_spend = pd.read_csv("Marketing_Spend.csv")
+    customer_data = pd.read_excel("CustomersData.xlsx")
+    tax_amount = pd.read_excel("Tax_amount.xlsx")
 
     return online_sales, discount_coupon, marketing_spend, customer_data, tax_amount
+
 
 online_sales, discount_coupon, marketing_spend, customer_data, tax_amount = load_data()
 
