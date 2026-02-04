@@ -29,18 +29,12 @@ client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 # --------------------------------------
 @st.cache_data
 def load_data():
-    online_sales = pd.read_csv("Online_Sales.csv")
-    discount_coupon = pd.read_csv("Discount_Coupon.csv")
-    marketing_spend = pd.read_csv("Marketing_Spend.csv")
-    customer_data = pd.read_excel("CustomersData.xlsx")
-    tax_amount = pd.read_excel("Tax_amount.xlsx")
-
     return {
-        "Online Sales": online_sales,
-        "Discount Coupon": discount_coupon,
-        "Marketing Spend": marketing_spend,
-        "Customer Data": customer_data,
-        "Tax Amount": tax_amount
+        "Online Sales": pd.read_csv("Online_Sales.csv"),
+        "Discount Coupon": pd.read_csv("Discount_Coupon.csv"),
+        "Marketing Spend": pd.read_csv("Marketing_Spend.csv"),
+        "Customer Data": pd.read_excel("CustomersData.xlsx"),
+        "Tax Amount": pd.read_excel("Tax_amount.xlsx")
     }
 
 datasets = load_data()
@@ -52,28 +46,32 @@ customer_data = datasets["Customer Data"]
 tax_amount = datasets["Tax Amount"]
 
 # --------------------------------------
-# SIDEBAR — DATASET EXPLORER (NEW)
+# SIDEBAR — DATASET SELECTION ONLY
 # --------------------------------------
-st.sidebar.title("📁 Data Explorer")
+st.sidebar.title("📁 Dataset Selection")
 
 selected_dataset_name = st.sidebar.selectbox(
-    "Select a dataset to preview",
+    "Choose a dataset",
     list(datasets.keys())
 )
 
-show_preview = st.sidebar.checkbox("Preview dataset", value=True)
+# --------------------------------------
+# MAIN DASHBOARD — DATASET PREVIEW
+# --------------------------------------
+st.markdown("## 🔍 Dataset Preview")
 
-if show_preview:
-    st.sidebar.markdown("### 🔍 Dataset Preview")
-    st.sidebar.dataframe(
-        datasets[selected_dataset_name].head(20),
-        use_container_width=True
-    )
+st.write(
+    f"**{selected_dataset_name}** — "
+    f"{datasets[selected_dataset_name].shape[0]} rows × "
+    f"{datasets[selected_dataset_name].shape[1]} columns"
+)
 
-st.sidebar.markdown("---")
-st.sidebar.markdown("📊 **Available Datasets**")
-for name, df in datasets.items():
-    st.sidebar.write(f"- **{name}** ({df.shape[0]} rows, {df.shape[1]} columns)")
+st.dataframe(
+    datasets[selected_dataset_name].head(20),
+    use_container_width=True
+)
+
+st.divider()
 
 # --------------------------------------
 # DATA PREPROCESSING
@@ -212,7 +210,7 @@ Explain:
     return res.choices[0].message.content
 
 # --------------------------------------
-# EXAMPLE QUESTIONS (GUIDED UX)
+# EXAMPLE QUESTIONS (NOW BELOW DATA)
 # --------------------------------------
 st.markdown("## 💡 Example Questions You Can Ask")
 
@@ -230,7 +228,7 @@ example_queries = [
 ]
 
 selected_query = st.radio(
-    "👇 Click a question or write your own below:",
+    "👇 Click a question or ask your own:",
     example_queries,
     index=None
 )
