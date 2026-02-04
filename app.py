@@ -6,8 +6,6 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 from groq import Groq
-import json
-import os
 
 # --------------------------------------
 # PAGE CONFIG
@@ -27,31 +25,17 @@ st.caption("Ask business questions in natural language")
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
 # --------------------------------------
-# LOAD DATA (LOCAL FILES — Streamlit Cloud)
+# LOAD DATA (LOCAL REPO FILES)
 # --------------------------------------
 @st.cache_data
 def load_data():
-    required_files = [
-        "Online_Sales.csv",
-        "Discount_Coupon.csv",
-        "Marketing_Spend.csv",
-        "CustomersData.xlsx",
-        "Tax_amount.xlsx"
-    ]
-
-    for file in required_files:
-        if not os.path.exists(file):
-            st.error(f"❌ Missing file: {file}")
-            st.stop()
-
-    online_sales = pd.read_csv("Online_Sales.csv")
-    discount_coupon = pd.read_csv("Discount_Coupon.csv")
-    marketing_spend = pd.read_csv("Marketing_Spend.csv")
-    customer_data = pd.read_excel("CustomersData.xlsx")
-    tax_amount = pd.read_excel("Tax_amount.xlsx")
+    online_sales = pd.read_csv("data/Online_Sales.csv")
+    discount_coupon = pd.read_csv("data/Discount_Coupon.csv")
+    marketing_spend = pd.read_csv("data/Marketing_Spend.csv")
+    customer_data = pd.read_excel("data/CustomersData.xlsx")
+    tax_amount = pd.read_excel("data/Tax_amount.xlsx")
 
     return online_sales, discount_coupon, marketing_spend, customer_data, tax_amount
-
 
 online_sales, discount_coupon, marketing_spend, customer_data, tax_amount = load_data()
 
@@ -188,24 +172,54 @@ Explain:
     return res.choices[0].message.content
 
 # --------------------------------------
-# UI
+# EXAMPLE QUESTIONS (GUIDED UX)
+# --------------------------------------
+st.markdown("## 💡 Example Questions You Can Ask")
+
+example_queries = [
+    "How did Android and Nest products perform over time in California compared to New York?",
+    "Which product categories show consistent growth across multiple regions?",
+    "When marketing spend increased, which product categories translated that into higher revenue?",
+    "Are there regions where offline marketing performs better than online marketing?",
+    "Which products rely heavily on discounts to generate sales?",
+    "Did discount-heavy months help or hurt revenue for Apparel and Bags?",
+    "Which product categories perform well in California but struggle in Chicago?",
+    "Are there products that sell in high volume but contribute very little revenue?",
+    "If marketing budgets were reduced, which products would be least impacted?",
+    "Based on sales, discounts, and marketing together, where should the company focus next?"
+]
+
+selected_query = st.radio(
+    "👇 Click a question or write your own below:",
+    example_queries,
+    index=None
+)
+
+st.divider()
+
+# --------------------------------------
+# USER INPUT
 # --------------------------------------
 query = st.text_input(
     "🧠 Ask a business question",
-    placeholder="e.g. Are discounts hurting revenue in Electronics?"
+    value=selected_query if selected_query else "",
+    placeholder="Type or select a question above"
 )
 
+# --------------------------------------
+# RUN AGENT
+# --------------------------------------
 if query:
     intent = classify_intent(query)
     st.markdown(f"### 🎯 Intent: `{intent}`")
 
     if intent == "unknown":
-        st.warning("I couldn’t understand this question.")
+        st.warning("I couldn’t clearly understand this question.")
     else:
         result_df = INTENT_TO_ANALYSIS[intent](online_sales)
 
         st.markdown("### 📊 Analysis Preview")
-        st.dataframe(result_df.head(20))
+        st.dataframe(result_df.head(20), use_container_width=True)
 
         st.markdown("### 📝 Explanation")
         explanation = explain_result(query, result_df.head())
