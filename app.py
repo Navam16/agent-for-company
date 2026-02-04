@@ -1,226 +1,107 @@
-# ======================================
-# app.py — AI Business Analyst Agent
-# ======================================
-
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-from groq import Groq
 
-# --------------------------------------
-# PAGE CONFIG
-# --------------------------------------
+# -------------------------------
+# Page config
+# -------------------------------
 st.set_page_config(
-    page_title="AI Business Analyst",
-    page_icon="📊",
+    page_title="📊 AI Business Analyst Agent",
     layout="wide"
 )
 
 st.title("📊 AI Business Analyst Agent")
 st.caption("Ask business questions in natural language")
 
-# --------------------------------------
-# LOAD GROQ CLIENT (Secrets)
-# --------------------------------------
-client = Groq(api_key=st.secrets["GROQ_API_KEY"])
-
-# --------------------------------------
-# LOAD DATA (LOCAL REPO FILES)
-# --------------------------------------
-@st.cache_data
+# -------------------------------
+# Data loading
+# -------------------------------
+@st.cache_data(show_spinner=True)
 def load_data():
-    online_sales = pd.read_csv("data/Online_Sales.csv")
-    discount_coupon = pd.read_csv("data/Discount_Coupon.csv")
-    marketing_spend = pd.read_csv("data/Marketing_Spend.csv")
-    customer_data = pd.read_excel("data/CustomersData.xlsx")
-    tax_amount = pd.read_excel("data/Tax_amount.xlsx")
+    try:
+        online_sales = pd.read_csv("Online_Sales.csv")
+        discount_coupon = pd.read_csv("Discount_Coupon.csv")
+        marketing_spend = pd.read_csv("Marketing_Spend.csv")
+        customer_data = pd.read_excel("CustomersData.xlsx")
+        tax_amount = pd.read_excel("Tax_amount.xlsx")
 
-    return online_sales, discount_coupon, marketing_spend, customer_data, tax_amount
+        return online_sales, discount_coupon, marketing_spend, customer_data, tax_amount
+
+    except Exception as e:
+        st.error("❌ Error loading datasets. Please check file names and formats.")
+        st.exception(e)
+        st.stop()
+
 
 online_sales, discount_coupon, marketing_spend, customer_data, tax_amount = load_data()
 
-# --------------------------------------
-# DATA PREPROCESSING
-# --------------------------------------
-online_sales["Transaction_Date"] = pd.to_datetime(
-    online_sales["Transaction_Date"], errors="coerce"
-)
-online_sales["Revenue"] = online_sales["Quantity"] * online_sales["Avg_Price"]
-online_sales["Year"] = online_sales["Transaction_Date"].dt.year
-online_sales["Month"] = online_sales["Transaction_Date"].dt.month
-online_sales["Coupon_Status"] = online_sales["Coupon_Status"].fillna("No Coupon")
+# -------------------------------
+# Sidebar info
+# -------------------------------
+st.sidebar.success("✅ Data loaded successfully")
 
-discount_coupon["Month"] = discount_coupon["Month"].astype(str)
-discount_coupon["Discount_pct"] = discount_coupon["Discount_pct"].fillna(0)
+st.sidebar.markdown("### 📁 Dataset Overview")
+st.sidebar.write(f"Online Sales rows: {online_sales.shape[0]}")
+st.sidebar.write(f"Discount Coupon rows: {discount_coupon.shape[0]}")
+st.sidebar.write(f"Marketing Spend rows: {marketing_spend.shape[0]}")
+st.sidebar.write(f"Customer Data rows: {customer_data.shape[0]}")
+st.sidebar.write(f"Tax Amount rows: {tax_amount.shape[0]}")
 
-marketing_spend["Date"] = pd.to_datetime(marketing_spend["Date"], errors="coerce")
-marketing_spend["Year"] = marketing_spend["Date"].dt.year
-marketing_spend["Month"] = marketing_spend["Date"].dt.month
-marketing_spend["Total_Marketing_Spend"] = (
-    marketing_spend["Offline_Spend"] + marketing_spend["Online_Spend"]
-)
+# -------------------------------
+# Dataset preview
+# -------------------------------
+with st.expander("🔍 Preview Datasets"):
+    st.subheader("Online Sales")
+    st.dataframe(online_sales.head())
 
-tax_amount["GST"] = tax_amount["GST"].fillna(0)
+    st.subheader("Discount Coupon")
+    st.dataframe(discount_coupon.head())
 
-# --------------------------------------
-# LOOKUPS
-# --------------------------------------
-tax_lookup = tax_amount.set_index("Product_Category")["GST"]
-discount_lookup = discount_coupon.set_index(
-    ["Month", "Product_Category"]
-)["Discount_pct"]
-marketing_lookup = marketing_spend.groupby(
-    ["Year", "Month"]
-)["Total_Marketing_Spend"].sum()
+    st.subheader("Marketing Spend")
+    st.dataframe(marketing_spend.head())
 
-online_sales["GST_pct"] = online_sales["Product_Category"].map(tax_lookup)
-online_sales["Discount_pct"] = (
-    online_sales
-    .set_index(["Month", "Product_Category"])
-    .index.map(discount_lookup)
-    .fillna(0)
-)
-online_sales["Marketing_Spend"] = (
-    online_sales
-    .set_index(["Year", "Month"])
-    .index.map(marketing_lookup)
-)
+    st.subheader("Customer Data")
+    st.dataframe(customer_data.head())
 
-# --------------------------------------
-# ANALYSIS FUNCTIONS
-# --------------------------------------
-def sales_trend(df):
-    return (
-        df.groupby(["Year", "Month", "Product_Category"])["Revenue"]
-        .sum()
-        .reset_index()
-    )
+    st.subheader("Tax Amount")
+    st.dataframe(tax_amount.head())
 
-def underperforming_products(df):
-    return (
-        df.groupby("Product_Category")
-        .agg(
-            total_revenue=("Revenue", "sum"),
-            avg_discount=("Discount_pct", "mean"),
-            total_quantity=("Quantity", "sum")
-        )
-        .reset_index()
-        .sort_values("total_revenue")
-    )
-
-def discount_vs_revenue(df):
-    return (
-        df.groupby("Product_Category")
-        .agg(
-            avg_discount_pct=("Discount_pct", "mean"),
-            total_revenue=("Revenue", "sum")
-        )
-        .reset_index()
-    )
-
-INTENT_TO_ANALYSIS = {
-    "sales_trend": sales_trend,
-    "underperforming_products": underperforming_products,
-    "discount_vs_revenue": discount_vs_revenue
-}
-
-# --------------------------------------
-# INTENT CLASSIFICATION (Groq)
-# --------------------------------------
-def classify_intent(query):
-    prompt = f"""
-Classify into ONE intent:
-- sales_trend
-- underperforming_products
-- discount_vs_revenue
-- unknown
-
-Return ONLY the intent name.
-Question: {query}
-"""
-    res = client.chat.completions.create(
-        model="llama-3.1-8b-instant",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0
-    )
-    intent = res.choices[0].message.content.strip().lower()
-    return intent if intent in INTENT_TO_ANALYSIS else "unknown"
-
-# --------------------------------------
-# EXPLANATION
-# --------------------------------------
-def explain_result(query, df_preview):
-    prompt = f"""
-You are a business analyst.
-
-Question:
-{query}
-
-Analysis output (sample):
-{df_preview}
-
-Explain:
-1. What is happening
-2. Why it might be happening
-3. Business implication
-"""
-    res = client.chat.completions.create(
-        model="llama-3.1-8b-instant",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.3
-    )
-    return res.choices[0].message.content
-
-# --------------------------------------
-# EXAMPLE QUESTIONS (GUIDED UX)
-# --------------------------------------
-st.markdown("## 💡 Example Questions You Can Ask")
+# -------------------------------
+# Business Question Input
+# -------------------------------
+st.markdown("## 💬 Ask a Business Question")
 
 example_queries = [
-    "How did Android and Nest products perform over time in California compared to New York?",
-    "Which product categories show consistent growth across multiple regions?",
-    "When marketing spend increased, which product categories translated that into higher revenue?",
-    "Are there regions where offline marketing performs better than online marketing?",
-    "Which products rely heavily on discounts to generate sales?",
-    "Did discount-heavy months help or hurt revenue for Apparel and Bags?",
-    "Which product categories perform well in California but struggle in Chicago?",
-    "Are there products that sell in high volume but contribute very little revenue?",
-    "If marketing budgets were reduced, which products would be least impacted?",
-    "Based on sales, discounts, and marketing together, where should the company focus next?"
+    "Which product categories show high sales but low marketing spend?",
+    "How do discounts impact repeat customers across regions?",
+    "Identify months where tax impact reduced net revenue significantly",
+    "Which customer segment is most sensitive to discount coupons?",
+    "Compare online sales growth with marketing spend efficiency"
 ]
 
-selected_query = st.radio(
-    "👇 Click a question or write your own below:",
-    example_queries,
-    index=None
-)
-
-st.divider()
-
-# --------------------------------------
-# USER INPUT
-# --------------------------------------
 query = st.text_input(
-    "🧠 Ask a business question",
-    value=selected_query if selected_query else "",
-    placeholder="Type or select a question above"
+    "Type your business question here:",
+    placeholder="e.g. Which region has the highest profit margin after tax?"
 )
 
-# --------------------------------------
-# RUN AGENT
-# --------------------------------------
+st.markdown("**Try these examples:**")
+for q in example_queries:
+    st.markdown(f"- {q}")
+
+# -------------------------------
+# Placeholder response logic
+# -------------------------------
 if query:
-    intent = classify_intent(query)
-    st.markdown(f"### 🎯 Intent: `{intent}`")
+    st.markdown("## 📈 Analysis Result")
 
-    if intent == "unknown":
-        st.warning("I couldn’t clearly understand this question.")
-    else:
-        result_df = INTENT_TO_ANALYSIS[intent](online_sales)
+    st.info(
+        "🧠 This is where your AI / agent / LLM logic will plug in.\n\n"
+        "Right now, the app confirms:\n"
+        "- Data is accessible\n"
+        "- Queries are captured\n"
+        "- Streamlit Cloud deployment is stable"
+    )
 
-        st.markdown("### 📊 Analysis Preview")
-        st.dataframe(result_df.head(20), use_container_width=True)
+    st.write("**Your question:**")
+    st.write(query)
 
-        st.markdown("### 📝 Explanation")
-        explanation = explain_result(query, result_df.head())
-        st.write(explanation)
+    st.success("✅ App is running correctly. Ready for AI integration.")
